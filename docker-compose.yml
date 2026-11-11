@@ -1,0 +1,6 @@
+services:
+  dev:
+    build: .
+    volumes:
+      - .:/app            #  Mac folder appears as /app in Linux
+    command: sleep infinity   # keep the container running
