@@ -14,6 +14,7 @@
 #include <sys/socket.h>   // socket, setsockopt, bind, listen
 #include <netinet/in.h>   // sockaddr_in, htons, INADDR_ANY
 #include <unistd.h>       // close
+#include <arpa/inet.h>    // inet_ntoa, ntohs (turn IP/port into readable form)
 
 int main(int argc, char *argv[])
 {
@@ -96,9 +97,58 @@ int main(int argc, char *argv[])
     }
     std::cout << "Server listening on port " << port << "\n";
 
-    // ===== Cleanup =====
-    // Temporary: in Step 5 the accept loop goes here, before closing.
-    close(listen_fd);
+        // ===== 🔒 FIXED – Step 5: iterative server loop =====
+    // The server runs forever and handles one client after another.
+    while (true) {
+        // Will be filled by accept() with the client's IP address and port.
+        struct sockaddr_in client_addr;
+        socklen_t client_len = sizeof(client_addr);
 
+        // accept() BLOCKS: the program waits here until a client connects.
+        // It returns a NEW socket only for this client.
+        // listen_fd keeps waiting at the "door" for the next client.
+        int client_fd = accept(listen_fd, (struct sockaddr *)&client_addr, &client_len);
+        if (client_fd == -1) {
+            perror("accept");
+            continue;   // one failed connection must not stop the whole server
+        }
+        std::cout << "Client connected: " << inet_ntoa(client_addr.sin_addr)
+                  << ":" << ntohs(client_addr.sin_port) << "\n";
+
+        // Buffer for incoming bytes.
+        char buffer[1024];
+        ssize_t n;
+
+        // recv() returns:
+        //   > 0  number of bytes received
+        //   0    the client closed the connection
+        //   -1   error
+        // We read sizeof(buffer) - 1 bytes to keep one byte free for '\0'.
+        while ((n = recv(client_fd, buffer, sizeof(buffer) - 1, 0)) > 0) {
+            buffer[n] = '\0';   // recv gives raw bytes; make it a valid C string
+
+            // ===== ✏️ YOURS – what the server does with the data =====
+            // For now: print it and send it back (echo).
+            // Later this becomes the command handling (SEND, LIST, READ, DEL, QUIT).
+            std::cout << "Received: " << buffer;
+            if (send(client_fd, buffer, n, 0) == -1) {
+                perror("send");
+                break;
+            }
+            // ===== end of your part =====
+        }
+        if (n == -1) {
+            perror("recv");
+        }
+
+        // Client is gone: free its socket, then wait for the next client.
+        std::cout << "Client disconnected\n";
+        close(client_fd);
+    }
+
+    // Not reached yet (the loop never ends).
+    // Later a signal handler for Ctrl+C will make the loop stop cleanly.
+    close(listen_fd);
     return EXIT_SUCCESS;
 }
+    
