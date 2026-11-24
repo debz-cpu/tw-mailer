@@ -49,10 +49,7 @@ int main(int argc, char *argv[])
     std::cerr << "Error: port must be between 1 and 65535\n";
     return EXIT_FAILURE;
    } 
-
    std::string spoolDir = argv[2];
-
-
 
 
    socklen_t addrlen;
@@ -66,18 +63,6 @@ int main(int argc, char *argv[])
    // SIGINT (Interrup: ctrl+c)
    // https://man7.org/linux/man-pages/man2/signal.2.html
 
-   if (signal(SIGINT, signalHandler) == SIG_ERR)
-   {
-      perror("signal can not be registered");
-      return EXIT_FAILURE;
-   }
-
-
-
-   ////////////////////////////////////////////////////////////////////////////
-   // SIGNAL HANDLER
-   // SIGINT (Interrup: ctrl+c)
-   // https://man7.org/linux/man-pages/man2/signal.2.html
    if (signal(SIGINT, signalHandler) == SIG_ERR)
    {
       perror("signal can not be registered");
@@ -121,7 +106,6 @@ int main(int argc, char *argv[])
       perror("set socket options - reusePort");
       return EXIT_FAILURE;
    }
-
 
 
    ////////////////////////////////////////////////////////////////////////////
@@ -175,9 +159,9 @@ int main(int argc, char *argv[])
          break;
       }
 
-      /////////////////////////////////////////////////////////////////////////
-      // START CLIENT
-      // ignore printf error handling
+/////////////////////////////////////////////////////////////////////////
+// START CLIENT
+// ignore printf error handling
       printf("Client connected from %s:%d...\n",
              inet_ntoa(cliaddress.sin_addr),
              ntohs(cliaddress.sin_port));
@@ -201,6 +185,25 @@ int main(int argc, char *argv[])
 
    return EXIT_SUCCESS;
 }
+bool readline(int sock, std::string &line){
+   line.clear();
+   while(true){
+      char c;
+      ssize_t n = recv(sock, &c, 1, 0);
+      if(n<=0){
+         return false;
+      }
+      if(c =='\n'){
+         return true;
+      }else if(c =='\r'){
+         continue;
+      }else{
+
+         line+=c;
+      }
+
+   }
+}
 
 void *clientCommunication(void *data)
 {
@@ -208,16 +211,9 @@ void *clientCommunication(void *data)
    int size;
    int *current_socket = (int *)data;
 
-   ////////////////////////////////////////////////////////////////////////////
-   // SEND welcome message
-   strcpy(buffer, "Welcome to myserver!\r\nPlease enter your commands...\r\n");
-   if (send(*current_socket, buffer, strlen(buffer), 0) == -1)
-   {
-      perror("send failed");
-      return NULL;
-   }
 
-   do
+
+   do   
    {
       /////////////////////////////////////////////////////////////////////////
       // RECEIVE
@@ -254,12 +250,12 @@ void *clientCommunication(void *data)
       buffer[size] = '\0';
       printf("Message received: %s\n", buffer); // ignore error
 
-      if (send(*current_socket, "OK", 3, 0) == -1)
+      if (send(*current_socket, "OK\n", 3, 0) == -1)
       {
          perror("send answer failed");
          return NULL;
       }
-   } while (strcmp(buffer, "quit") != 0 && !abortRequested);
+   } while (strcmp(buffer, "QUIT") != 0 && !abortRequested);
 
    // closes/frees the descriptor if not already
    if (*current_socket != -1)
