@@ -185,6 +185,7 @@ int main(int argc, char *argv[])
 
    return EXIT_SUCCESS;
 }
+
 bool readline(int sock, std::string &line){
    line.clear();
    while(true){
@@ -207,55 +208,31 @@ bool readline(int sock, std::string &line){
 
 void *clientCommunication(void *data)
 {
-   char buffer[BUF];
-   int size;
    int *current_socket = (int *)data;
-
-
+   std::string line;
 
    do   
    {
       /////////////////////////////////////////////////////////////////////////
       // RECEIVE
-      size = recv(*current_socket, buffer, BUF - 1, 0);
-      if (size == -1)
-      {
-         if (abortRequested)
-         {
-            perror("recv error after aborted");
-         }
-         else
-         {
-            perror("recv error");
-         }
+      if(!readline(*current_socket, line)){
+         printf("client closed remote socket\n");
          break;
       }
-
-      if (size == 0)
+      if (line == "QUIT")
       {
-         printf("Client closed remote socket\n"); // ignore error
-         break;
+         break; 
       }
 
-      // remove ugly debug message, because of the sent newline of client
-      if (buffer[size - 2] == '\r' && buffer[size - 1] == '\n')
-      {
-         size -= 2;
-      }
-      else if (buffer[size - 1] == '\n')
-      {
-         --size;
-      }
+      printf("Message received: %s\n",line.c_str()); // ignore error
 
-      buffer[size] = '\0';
-      printf("Message received: %s\n", buffer); // ignore error
 
       if (send(*current_socket, "OK\n", 3, 0) == -1)
       {
          perror("send answer failed");
          return NULL;
       }
-   } while (strcmp(buffer, "QUIT") != 0 && !abortRequested);
+   } while (!abortRequested);
 
    // closes/frees the descriptor if not already
    if (*current_socket != -1)

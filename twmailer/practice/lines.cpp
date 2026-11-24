@@ -15,10 +15,4 @@ int main()
         }
     }
     return 0;
-
-
-
-
-    bool readline(int sock, std::string & line)
-    fchar c;
 }
