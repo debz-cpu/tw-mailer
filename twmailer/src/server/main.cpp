@@ -12,6 +12,9 @@
 #include <sys/stat.h>
 #include <errno.h>
 #include <fstream>
+#include <vector>
+#include <dirent.h>
+#include <algorithm>
 
 ////////////////////////////////////////////////
 
@@ -323,7 +326,7 @@ void handleSend(int sock)
        << subject << "\n"
        << body;
    out.close();
-   ///// 
+   /////
    if (!out)
    {
       perror("write mail file failed");
@@ -345,9 +348,80 @@ void handleSend(int sock)
 ///////////////////////////////////////////////////////////////
 void handleList(int sock)
 {
-   printf("LIST command received\n");
-   send(sock, "OK\n", 3, 0);
+   std::string username;
+   if (!readline(sock, username))
+   {
+      return;
+   }
+
+   if (!isValidUsername(username))
+   {
+      if (send(sock, "0\n", 2, 0) == -1)
+      {
+         perror("send answer failed");
+      }
+      return;
+   }
+
+   std::string folder = spoolDir + "/" + username;
+   DIR *dirp = opendir(folder.c_str());
+   if (dirp == NULL)
+   {
+      if (send(sock, "0\n", 2, 0) == -1)
+      {
+         perror("send answer failed");
+      }
+      return;
+   }
+
+   std::vector<int> nums;
+   struct dirent *direntp;
+   while ((direntp = readdir(dirp)) != NULL)
+   {
+      std::string name = direntp->d_name;
+      if (name == "." || name == "..")
+      {
+         continue;
+      }
+      try
+      {
+         nums.push_back(std::stoi(name));
+      }
+      catch (const std::exception &)
+      {
+         // skip non-numeric entries
+      }
+   }
+   closedir(dirp);
+
+   std::sort(nums.begin(), nums.end());
+
+   std::string answer = std::to_string(nums.size()) + "\n";
+
+   for (int num : nums)
+   {
+      std::string filePath = folder + "/" + std::to_string(num);
+      std::ifstream file(filePath);
+      if (!file)
+      {
+         continue;
+      }
+
+      std::string line;
+      std::getline(file, line);     // line 1: sender
+      std::getline(file, line);     // line 2: receiver
+      if (std::getline(file, line)) // line 3: subject
+      {
+         answer += line + "\n";
+      }
+   }
+
+   if (send(sock, answer.c_str(), answer.size(), 0) == -1)
+   {
+      perror("send answer failed");
+   }
 }
+
 ///////////////////////////////////////////////////////////////
 void handleRead(int sock)
 {
