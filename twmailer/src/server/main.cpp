@@ -9,6 +9,9 @@
 #include <signal.h>
 #include <iostream>
 #include <string>
+#include <sys/stat.h>
+#include <errno.h>
+#include <fstream>
 
 ////////////////////////////////////////////////
 
@@ -21,6 +24,7 @@
 int abortRequested = 0;
 int create_socket = -1;
 int new_socket = -1;
+std::string spoolDir;
 
 ////////////////////////////////////////////////
 void *clientCommunication(void *data);
@@ -32,40 +36,40 @@ void handleRead(int sock);
 void handleDel(int sock);
 bool isValidUsername(const std::string &name);
 
-
-
 int main(int argc, char *argv[])
 {
 
    // exactly 3 words: program, port, spool directory
-   if (argc != 3) {
+   if (argc != 3)
+   {
       std::cerr << "Usage: " << argv[0] << " <port> <mail-spool-directoryname>" << std::endl;
       return EXIT_FAILURE;
    }
 
    // convert port text -> number
    int port;
-   try {
+   try
+   {
       port = std::stoi(argv[1]);
-   } catch (const std::exception &) {
+   }
+   catch (const std::exception &)
+   {
       std::cerr << "Error: port must be a number, got: " << argv[1] << "\n";
       return EXIT_FAILURE;
    }
 
-   if(port<1||port >65535){
-    std::cerr << "Error: port must be between 1 and 65535\n";
-    return EXIT_FAILURE;
-   } 
-   std::string spoolDir = argv[2];
-
+   if (port < 1 || port > 65535)
+   {
+      std::cerr << "Error: port must be between 1 and 65535\n";
+      return EXIT_FAILURE;
+   }
+   spoolDir = argv[2];
 
    socklen_t addrlen;
    struct sockaddr_in address, cliaddress;
    int reuseValue = 1;
 
-
-
-////////////////////////////////////////////////////////////////////////////
+   ////////////////////////////////////////////////////////////////////////////
    // SIGNAL HANDLER
    // SIGINT (Interrup: ctrl+c)
    // https://man7.org/linux/man-pages/man2/signal.2.html
@@ -75,7 +79,6 @@ int main(int argc, char *argv[])
       perror("signal can not be registered");
       return EXIT_FAILURE;
    }
-
 
    ////////////////////////////////////////////////////////////////////////////
    // CREATE A SOCKET
@@ -114,7 +117,6 @@ int main(int argc, char *argv[])
       return EXIT_FAILURE;
    }
 
-
    ////////////////////////////////////////////////////////////////////////////
    // INIT ADDRESS
    // Attention: network byte order => big endian
@@ -123,7 +125,6 @@ int main(int argc, char *argv[])
    address.sin_addr.s_addr = INADDR_ANY;
    address.sin_port = htons(port);
 
-
    ////////////////////////////////////////////////////////////////////////////
    // ASSIGN AN ADDRESS WITH PORT TO SOCKET
    if (bind(create_socket, (struct sockaddr *)&address, sizeof(address)) == -1)
@@ -131,7 +132,7 @@ int main(int argc, char *argv[])
       perror("bind error");
       return EXIT_FAILURE;
    }
-///////////////////////////////////////////////////////////////////////////
+   ///////////////////////////////////////////////////////////////////////////
    // ALLOW CONNECTION ESTABLISHING
    // Socket, Backlog (= count of waiting connections allowed)
    if (listen(create_socket, 5) == -1)
@@ -166,9 +167,9 @@ int main(int argc, char *argv[])
          break;
       }
 
-/////////////////////////////////////////////////////////////////////////
-// START CLIENT
-// ignore printf error handling
+      /////////////////////////////////////////////////////////////////////////
+      // START CLIENT
+      // ignore printf error handling
       printf("Client connected from %s:%d...\n",
              inet_ntoa(cliaddress.sin_addr),
              ntohs(cliaddress.sin_port));
@@ -193,23 +194,30 @@ int main(int argc, char *argv[])
    return EXIT_SUCCESS;
 }
 /////////////////////////////////////////////////////////
-bool readline(int sock, std::string &line){
+bool readline(int sock, std::string &line)
+{
    line.clear();
-   while(true){
+   while (true)
+   {
       char c;
       ssize_t n = recv(sock, &c, 1, 0);
-      if(n<=0){
+      if (n <= 0)
+      {
          return false;
       }
-      if(c =='\n'){
+      if (c == '\n')
+      {
          return true;
-      }else if(c =='\r'){
-         continue;
-      }else{
-
-         line+=c;
       }
+      else if (c == '\r')
+      {
+         continue;
+      }
+      else
+      {
 
+         line += c;
+      }
    }
 }
 ///////////////////////////////////////////////////////////////
@@ -233,31 +241,97 @@ bool isValidUsername(const std::string &name)
    return true;
 }
 
-void handleSend(int sock){
+void handleSend(int sock)
+{
 
    std::string sender, receiver, subject;
-   if (!readline(sock, sender)) return;
-   if (!readline(sock, receiver)) return;
-   if (!readline(sock, subject)) return;
+   if (!readline(sock, sender))
+      return;
+   if (!readline(sock, receiver))
+      return;
+   if (!readline(sock, subject))
+      return;
    std::string body;
    std::string line;
    while (true)
    {
-      if (!readline(sock, line)) return;
+      if (!readline(sock, line))
+         return;
       if (line == ".")
       {
          break;
       }
       body += line + "\n";
-      }
-      if (!isValidUsername(sender) || !isValidUsername(receiver) || subject.size() > 80)
+   }
+   /// Validation check
+   if (!isValidUsername(sender) || !isValidUsername(receiver) || subject.size() > 80)
+   {
+      if (send(sock, "ERR\n", 4, 0) == -1)
       {
-         if (send(sock, "ERR\n", 4, 0) == -1)
-         {
-            perror("send answer failed");
-         }
-         return;
+         perror("send answer failed");
       }
+      return;
+   }
+
+   ////// create spool- und userDir
+   if (mkdir(spoolDir.c_str(), 0700) == -1 && errno != EEXIST)
+   {
+      perror("mkdir spoolDir failed");
+      if (send(sock, "ERR\n", 4, 0) == -1)
+      {
+         perror("send answer failed");
+      }
+      return;
+   }
+   std::string userDir = spoolDir + "/" + receiver;
+   if (mkdir(userDir.c_str(), 0700) == -1 && errno != EEXIST)
+   {
+      perror("mkdir userDir failed");
+      if (send(sock, "ERR\n", 4, 0) == -1)
+      {
+         perror("send answer failed");
+      }
+      return;
+   }
+   int i = 1;
+   std::string filePath;
+   while (true)
+   {
+      filePath = userDir + "/" + std::to_string(i);
+      std::ifstream test(filePath);
+      if (!test)
+      {
+         break;
+      }
+      i++;
+   }
+
+   std::ofstream out(filePath);
+   if (!out)
+   {
+      perror("open mail file failed");
+      if (send(sock, "ERR\n", 4, 0) == -1)
+      {
+         perror("send answer failed");
+      }
+      return;
+   }
+
+   out << sender << "\n"
+       << receiver << "\n"
+       << subject << "\n"
+       << body;
+   out.close();
+
+   if (!out)
+   {
+      perror("write mail file failed");
+      if (send(sock, "ERR\n", 4, 0) == -1)
+      {
+         perror("send answer failed");
+      }
+      return;
+   }
 
    printf("SEND from '%s' to '%s' | Subject: '%s'\nBody:\n%s",
           sender.c_str(), receiver.c_str(), subject.c_str(), body.c_str());
@@ -268,12 +342,14 @@ void handleSend(int sock){
    }
 }
 ///////////////////////////////////////////////////////////////
-void handleList(int sock){
+void handleList(int sock)
+{
    printf("LIST command received\n");
    send(sock, "OK\n", 3, 0);
 }
 ///////////////////////////////////////////////////////////////
-void handleRead(int sock){
+void handleRead(int sock)
+{
    printf("READ command received\n");
    send(sock, "OK\n", 3, 0);
 }
@@ -290,26 +366,37 @@ void *clientCommunication(void *data)
    int *current_socket = (int *)data;
    std::string line;
 
-   do   
+   do
    {
       /////////////////////////////////////////////////////////////////////////
       // RECEIVE
-      if(!readline(*current_socket, line)){
+      if (!readline(*current_socket, line))
+      {
          printf("client closed remote socket\n");
          break;
       }
       if (line == "QUIT")
       {
-         break; 
-      }else if (line == "SEND"){
+         break;
+      }
+      else if (line == "SEND")
+      {
          handleSend(*current_socket);
-      }else if(line =="LIST"){
+      }
+      else if (line == "LIST")
+      {
          handleList(*current_socket);
-      }else if (line == "READ"){
+      }
+      else if (line == "READ")
+      {
          handleRead(*current_socket);
-      }else if (line == "DEL"){
+      }
+      else if (line == "DEL")
+      {
          handleDel(*current_socket);
-      }else{
+      }
+      else
+      {
          printf("Unknown command: %s\n", line.c_str());
          if (send(*current_socket, "ERR\n", 4, 0) == -1)
          {
@@ -377,7 +464,4 @@ void signalHandler(int sig)
    {
       exit(sig);
    }
-
-
-
 }
