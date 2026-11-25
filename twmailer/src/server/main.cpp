@@ -25,6 +25,12 @@ int new_socket = -1;
 ////////////////////////////////////////////////
 void *clientCommunication(void *data);
 void signalHandler(int sig);
+bool readline(int sock, std::string &line);
+void handleSend(int sock);
+void handleList(int sock);
+void handleRead(int sock);
+void handleDel(int sock);
+
 
 
 int main(int argc, char *argv[])
@@ -185,7 +191,7 @@ int main(int argc, char *argv[])
 
    return EXIT_SUCCESS;
 }
-
+/////////////////////////////////////////////////////////
 bool readline(int sock, std::string &line){
    line.clear();
    while(true){
@@ -205,7 +211,29 @@ bool readline(int sock, std::string &line){
 
    }
 }
+///////////////////////////////////////////////////////////////
+void handleSend(int sock){
+   printf("SEND command received\n");
+   send(sock, "OK\n",3,0);
+}
+///////////////////////////////////////////////////////////////
+void handleList(int sock){
+   printf("LIST command received\n");
+   send(sock, "OK\n", 3, 0);
+}
+///////////////////////////////////////////////////////////////
+void handleRead(int sock){
+   printf("READ command received\n");
+   send(sock, "OK\n", 3, 0);
+}
+///////////////////////////////////////////////////////////////
+void handleDel(int sock)
+{
+   printf("DEL command received\n");
+   send(sock, "OK\n", 3, 0);
+}
 
+///////////////////////////////////////////////////////////////
 void *clientCommunication(void *data)
 {
    int *current_socket = (int *)data;
@@ -222,15 +250,21 @@ void *clientCommunication(void *data)
       if (line == "QUIT")
       {
          break; 
-      }
-
-      printf("Message received: %s\n",line.c_str()); // ignore error
-
-
-      if (send(*current_socket, "OK\n", 3, 0) == -1)
-      {
-         perror("send answer failed");
-         return NULL;
+      }else if (line == "SEND"){
+         handleSend(*current_socket);
+      }else if(line =="LIST"){
+         handleList(*current_socket);
+      }else if (line == "READ"){
+         handleRead(*current_socket);
+      }else if (line == "DEL"){
+         handleDel(*current_socket);
+      }else{
+         printf("Unknown command: %s\n", line.c_str());
+         if (send(*current_socket, "ERR\n", 4, 0) == -1)
+         {
+            perror("send answer failed");
+            return NULL;
+         }
       }
    } while (!abortRequested);
 
