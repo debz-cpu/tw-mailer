@@ -396,8 +396,7 @@ void handleList(int sock)
 
    std::sort(nums.begin(), nums.end());
 
-   std::string answer = std::to_string(nums.size()) + "\n";
-
+   std::vector<std::string> subjects;
    for (int num : nums)
    {
       std::string filePath = folder + "/" + std::to_string(num);
@@ -408,12 +407,18 @@ void handleList(int sock)
       }
 
       std::string line;
-      std::getline(file, line);     // line 1: sender
-      std::getline(file, line);     // line 2: receiver
+      std::getline(file, line); // line 1: sender
+      std::getline(file, line); // line 2: receiver
       if (std::getline(file, line)) // line 3: subject
       {
-         answer += line + "\n";
+         subjects.push_back(line);
       }
+   }
+
+   std::string answer = std::to_string(subjects.size()) + "\n";
+   for (const std::string &subj : subjects)
+   {
+      answer += subj + "\n";
    }
 
    if (send(sock, answer.c_str(), answer.size(), 0) == -1)
@@ -421,7 +426,6 @@ void handleList(int sock)
       perror("send answer failed");
    }
 }
-
 ///////////////////////////////////////////////////////////////
 void handleRead(int sock)
 {
