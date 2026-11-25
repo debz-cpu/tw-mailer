@@ -213,8 +213,30 @@ bool readline(int sock, std::string &line){
 }
 ///////////////////////////////////////////////////////////////
 void handleSend(int sock){
-   printf("SEND command received\n");
-   send(sock, "OK\n",3,0);
+
+   std::string sender, receiver, subject;
+   if (!readline(sock, sender)) return;
+   if (!readline(sock, receiver)) return;
+   if (!readline(sock, subject)) return;
+   std::string body;
+   std::string line;
+   while (true)
+   {
+      if (!readline(sock, line)) return;
+      if (line == ".")
+      {
+         break;
+      }
+      body += line + "\n";
+   }
+
+   printf("SEND from '%s' to '%s' | Subject: '%s'\nBody:\n%s",
+          sender.c_str(), receiver.c_str(), subject.c_str(), body.c_str());
+
+   if (send(sock, "OK\n", 3, 0) == -1)
+   {
+      perror("send answer failed");
+   }
 }
 ///////////////////////////////////////////////////////////////
 void handleList(int sock){
