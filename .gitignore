@@ -4,3 +4,4 @@ twmailer-client
 mailspool/
 *.pem
 *.key
+*.DS_Store
