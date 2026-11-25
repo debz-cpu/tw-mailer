@@ -30,6 +30,7 @@ void handleSend(int sock);
 void handleList(int sock);
 void handleRead(int sock);
 void handleDel(int sock);
+bool isValidUsername(const std::string &name);
 
 
 
@@ -212,6 +213,26 @@ bool readline(int sock, std::string &line){
    }
 }
 ///////////////////////////////////////////////////////////////
+bool isValidUsername(const std::string &name)
+{
+   if (name.empty() || name.size() > 8)
+   {
+      return false;
+   }
+
+   for (char c : name)
+   {
+      bool isLower = (c >= 'a' && c <= 'z');
+      bool isDigit = (c >= '0' && c <= '9');
+      if (!isLower && !isDigit)
+      {
+         return false;
+      }
+   }
+
+   return true;
+}
+
 void handleSend(int sock){
 
    std::string sender, receiver, subject;
@@ -228,7 +249,15 @@ void handleSend(int sock){
          break;
       }
       body += line + "\n";
-   }
+      }
+      if (!isValidUsername(sender) || !isValidUsername(receiver) || subject.size() > 80)
+      {
+         if (send(sock, "ERR\n", 4, 0) == -1)
+         {
+            perror("send answer failed");
+         }
+         return;
+      }
 
    printf("SEND from '%s' to '%s' | Subject: '%s'\nBody:\n%s",
           sender.c_str(), receiver.c_str(), subject.c_str(), body.c_str());
