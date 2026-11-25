@@ -293,6 +293,7 @@ void handleSend(int sock)
       }
       return;
    }
+   //// file name and path
    int i = 1;
    std::string filePath;
    while (true)
@@ -322,7 +323,7 @@ void handleSend(int sock)
        << subject << "\n"
        << body;
    out.close();
-
+   ///// 
    if (!out)
    {
       perror("write mail file failed");
